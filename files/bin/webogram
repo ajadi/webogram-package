@@ -1,0 +1,50 @@
+#!/bin/bash
+# Script to start webogram using gulp
+# It prints gulp PID
+BASE_DIR=$(dirname ${0})
+SCRIPT=$(basename ${0})
+
+print_help() {
+  echo ""
+  echo "Script to start webogram using gulp"
+  echo ""
+  echo "It prints gulp PID to stdout"
+  echo ""
+  echo "Syntax: "
+  echo ""
+  echo "${SCRIPT} -p <PATH_TO_WEBOGRAM> -l <PATH_TO_WEBOGRAM_LOG_FILE>"
+  echo ""
+  echo "Where: "
+  echo "  -p <PATH_TO_WEBOGRAM>          Path to webogram dir (usually a git clone)"
+  echo "  -l <PATH_TO_WEBOGRAM_LOG_FILE> Path to the webogram log file"
+  echo ""
+}
+
+print_invalid_syntax() {
+  echo "Incorrect syntax. Use -h for help."
+}
+
+# Parse options
+while getopts "p:l:h" opts; do
+  case "${opts}" in
+    p) WEBOGRAM_PATH=${OPTARG} ;;
+    l) WEBOGRAM_LOGFILE=${OPTARG} ;;
+    h) print_help
+       exit 1;;
+    *) print_invalid_syntax ${SCRIPT}
+       exit 2 ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ "${WEBOGRAM_PATH}" == "" ]; then
+  print_invalid_syntax
+  exit 3
+elif [ "${WEBOGRAM_LOGFILE}" == "" ]; then
+  print_invalid_syntax
+  exit 4
+fi
+
+cd ${WEBOGRAM_PATH}
+NODE_PATH=~/npm/lib/node_modules node ~/git/node_modules/gulp/bin/gulp.js watch &> ${WEBOGRAM_LOGFILE} &
+echo $!
