@@ -46,5 +46,5 @@ elif [ "${WEBOGRAM_LOGFILE}" == "" ]; then
 fi
 
 cd ${WEBOGRAM_PATH}
-NODE_PATH=~/npm/lib/node_modules node ~/git/node_modules/gulp/bin/gulp.js watch &> ${WEBOGRAM_LOGFILE} &
+NODE_PATH=${HOME}/.npm node_modules/gulp/bin/gulp.js watch &> ${WEBOGRAM_LOGFILE} & 
 echo $!

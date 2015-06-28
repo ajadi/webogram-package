@@ -1,9 +1,18 @@
-#!/bin/bash
-#
-# Run-level Startup script for webogram
-#
-# chkconfig: 345 91 19
-# description: Startup/Shutdown webogram service
+#!/bin/sh -e
+### BEGIN INIT INFO
+# Provides:          webogram
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Telegram Web App
+# Description:       Telegram Web App
+### END INIT INFO
+# /etc/init.d/webogram: start or stop webogram
+# Script adapted from kdm package
+
+# import the LSB init functions
+. /lib/lsb/init-functions
 
 WEBOGRAM_HOMEDIR="/opt/webogram"
 WEBOGRAM_BIN="${WEBOGRAM_HOMEDIR}/bin/webogram"
@@ -12,63 +21,89 @@ WEBOGRAM_PIDFILE="/var/run/webogram.pid"
 WEBOGRAM_LOGFILE="/var/log/webogram/webogram.log"
 WEBOGRAM_USER="webogram"
 
-find_pid_running() {
+SCRIPT=$(basename ${0})
+
+is_running() {
   local PID=""
-  for PID in $(ps -o pid -d| tr '\n' ' '); do
-    if [ "${PID}" == "${1}" ]; then
-      echo "TRUE"
-      return 0
-    fi
-  done
-  echo "FALSE"
+  if [ -f ${WEBOGRAM_PIDFILE} ]; then
+    local DAEMONPID="$(cat ${WEBOGRAM_PIDFILE})"
+    for PID in $(ps -o pid -d| tr '\n' ' '); do
+      if [ "${PID}" = "${DAEMONPID}" ]; then
+        echo "true"
+        return 0
+      fi
+    done
+  fi
   return 1
 }
 
-if [ ! -d ${WEBOGRAM_GITDIR} ]; then
-  echo "webogram folder (${WEBOGRAM_GITDIR}) not available: exiting"
-  exit 2
-elif [ ! -d ${WEBOGRAM_LOGDIR} ]; then
-  echo "webogram logfolder (${WEBOGRAM_LOGDIR}) not avilable: exiting"
-  exit 3
-fi
+get_daemon_pid() {
+  echo "$(cat ${WEBOGRAM_PIDFILE})"
+}
+
+. /lib/lsb/init-functions
 
 case "$1" in
   start)
-    echo -n "Starting webogram: "
+    log_action_begin_msg "Starting webogram"
+    if [ ! -d ${WEBOGRAM_GITDIR} ]; then
+      log_action_end_msg 1 "webogram folder (${WEBOGRAM_GITDIR}) not available: exiting"
+      exit 1
+    elif [ ! -d ${WEBOGRAM_LOGDIR} ]; then
+      log_action_end_msg 1 "webogram logfolder (${WEBOGRAM_LOGDIR}) not avilable: exiting"
+      exit 1
+    fi
     if [ -f ${WEBOGRAM_PIDFILE} ]; then
-      if [ "$(find_pid_running $(cat ${WEBOGRAM_PIDFILE}))" == "TRUE" ]; then
-        echo "already running (PID $(cat ${WEBOGRAM_PIDFILE}))"
-        exit 4
+      if [ $(is_running) ]; then
+        log_action_end_msg 1 "already running (pid $(get_daemon_pid))"
+        exit 0
       else
-        echo "crashed. Manually remove ${WEBOGRAM_PIDFILE} and retry"
-        exit 5
+        log_action_end_msg 1 "a previous run crashed. Manually remove ${WEBOGRAM_PIDFILE} and retry"
+        exit 1
       fi
     fi
     echo $(su -c "${WEBOGRAM_BIN} -p ${WEBOGRAM_PATH} -l ${WEBOGRAM_LOGFILE}" -l ${WEBOGRAM_USER}) > ${WEBOGRAM_PIDFILE}
-    if [ "$(find_pid_running $(cat ${WEBOGRAM_PIDFILE}))" == "TRUE" ]; then
-      echo "OK"
+    if [ $(is_running) ]; then
+      log_action_end_msg 0
+      exit 0
     else
-      echo "There were problems starting webogram: exiting"
+      log_action_end_msg 1 "check log at ${WEBOGRAM_LOGFILE}"
+      exit 1
     fi
     ;;
   stop)
-    echo -n "Shutdown webogram: "
-    kill "$(cat ${WEBOGRAM_PIDFILE})"
-    if [ $? -eq 0 ]; then
-      rm -f ${WEBOGRAM_PIDFILE}
-      echo "OK"
+    log_action_begin_msg "Stopping webogram"
+    if [ ! -f ${WEBOGRAM_PIDFILE} ]; then
+      log_action_end_msg 0 "not running: ${WEBOGRAM_PIDFILE} not found"
+      exit 0
+    fi
+    KILLCOUNT=1
+    while [ ${KILLCOUNT} -le 5 ]; do
+      if [ $(is_running) ]; then
+        kill $(get_daemon_pid)
+      else
+        break
+      fi
+      sleep 1
+      KILLCOUNT=$(( $KILLCOUNT + 1 ))
+    done
+    if [ $(is_running) ]; then
+      DAEMONPID=$(cat ${WEBOGRAM_PIDFILE})
+      log_action_cont_msg " not responding to TERM signal (pid $DAEMONPID)"
+      exit 1
     else
-      echo "There were problems stopping webogram: exiting"
-      exit -1
+      rm -f ${WEBOGRAM_PIDFILE}
+      log_action_end_msg 0
+      exit 0
     fi
     ;;
   reload|restart)
-    $0 stop
-    $0 start
+    /etc/init.d/${SCRIPT} stop
+    /etc/init.d/${SCRIPT} start
     ;;
   *)
-    echo "Usage: $0 start|stop|restart|reload"
-    exit -2
+    echo "Usage: /etc/init.d/${SCRIPT} start|stop|restart"
+    exit 1
     ;;
 esac
 exit 0
